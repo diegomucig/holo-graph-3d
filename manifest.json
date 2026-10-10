@@ -1,0 +1,9 @@
+{
+  "id": "holo-graph-3d",
+  "name": "Holo Graph 3D",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Grafo 3D olografico del vault: note, cartelle, allegati e tag, con colori e opzioni personalizzabili.",
+  "author": "Diego",
+  "isDesktopOnly": false
+}
