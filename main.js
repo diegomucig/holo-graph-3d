@@ -10,11 +10,11 @@ const FOV = Math.PI / 3;
 const DEFAULTS = {
   // filtri
   search: '', showNotes: true, showFolders: true, showAttachments: true, showTags: false,
-  showUnresolved: false, showOrphans: true, showRoot: true,
+  showUnresolved: false, showOrphans: true, showRoot: false,
   showNoteLinks: true, showEmbedLinks: true, showFolderLinks: true, showTagLinks: true,
   localMode: false, localDepth: 2, excludePaths: '',
   // colori
-  settingsVersion: 2, style: 'Arancione', colorMode: 'type', groups: [],
+  settingsVersion: 3, style: 'Arancione', colorMode: 'type', groups: [],
   bgColor: '#050302',
   colorNote: '#ffa726', colorFolder: '#ffd27a', colorAttachment: '#e8660c', colorTag: '#ffc04d',
   colorUnresolved: '#7a4a22', colorActive: '#fff1d6',
@@ -35,6 +35,10 @@ const DEFAULTS = {
   // forze
   repulsion: 45, linkDistance: 32, linkStrength: 0.8, folderLinkDistance: 20, folderLinkStrength: 0.9,
   gravity: 0.05, velocityDecay: 0.4,
+  // nucleo
+  core: true, coreAll: true, coreSize: 9, coreGlow: 1.6, coreParticles: 160,
+  colorCore: '#ffe2a8', colorLinkCore: '#b86a14',
+  spokeOpacity: 0.16, spokeDistance: 85, spokeStrength: 0.25,
   panelVisible: true,
 };
 
@@ -43,12 +47,14 @@ const PRESETS = {
     bgColor: '#050302', colorNote: '#ffa726', colorFolder: '#ffd27a', colorAttachment: '#e8660c', colorTag: '#ffc04d',
     colorUnresolved: '#7a4a22', colorActive: '#fff1d6',
     colorLinkLink: '#d9801a', colorLinkEmbed: '#ff8c1a', colorLinkFolder: '#9c5a14', colorLinkTag: '#b8761c',
-    starColor: '#ffb066', labelColor: '#ffe3bf' },
+    starColor: '#ffb066', labelColor: '#ffe3bf',
+    colorCore: '#ffe2a8', colorLinkCore: '#b86a14' },
   'Azzurro': {
     bgColor: '#020812', colorNote: '#3ec6ff', colorFolder: '#b5ecff', colorAttachment: '#1f8fff', colorTag: '#7fd8ff',
     colorUnresolved: '#3b5873', colorActive: '#e8f9ff',
     colorLinkLink: '#2a9be0', colorLinkEmbed: '#1f7fe0', colorLinkFolder: '#2b6ea0', colorLinkTag: '#3aa6c9',
-    starColor: '#8fd0ff', labelColor: '#d6f2ff' },
+    starColor: '#8fd0ff', labelColor: '#d6f2ff',
+    colorCore: '#d2f3ff', colorLinkCore: '#2a86c0' },
 };
 
 function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULTS)); }
@@ -276,14 +282,14 @@ function applyRepel(root, n, k, theta2, maxD2) {
 
 /* ================================= MOTORE ================================= */
 const K_STRUCT = new Set(['search', 'showNotes', 'showFolders', 'showAttachments', 'showTags', 'showUnresolved', 'showOrphans',
-  'showRoot', 'showNoteLinks', 'showEmbedLinks', 'showFolderLinks', 'showTagLinks', 'localMode', 'localDepth', 'excludePaths']);
-const K_FORCE = new Set(['repulsion', 'linkDistance', 'linkStrength', 'folderLinkDistance', 'folderLinkStrength', 'gravity', 'velocityDecay']);
-const K_SIZE = new Set(['nodeSize', 'sizeByDegree', 'scaleNote', 'scaleFolder', 'scaleAttachment', 'scaleTag', 'scaleUnresolved']);
-const K_PART = new Set(['particles', 'particleCount', 'particleSpeed', 'particleSize', 'particlesFolder']);
+  'showRoot', 'showNoteLinks', 'showEmbedLinks', 'showFolderLinks', 'showTagLinks', 'localMode', 'localDepth', 'excludePaths', 'core', 'coreAll']);
+const K_FORCE = new Set(['repulsion', 'linkDistance', 'linkStrength', 'folderLinkDistance', 'folderLinkStrength', 'gravity', 'velocityDecay', 'spokeDistance', 'spokeStrength']);
+const K_SIZE = new Set(['nodeSize', 'sizeByDegree', 'scaleNote', 'scaleFolder', 'scaleAttachment', 'scaleTag', 'scaleUnresolved', 'coreSize']);
+const K_PART = new Set(['particles', 'particleCount', 'particleSpeed', 'particleSize', 'particlesFolder', 'coreParticles']);
 const K_STARS = new Set(['stars', 'starCount', 'starColor']);
 const K_VIEW = new Set(['bgColor', 'autoRotate', 'autoRotateSpeed', 'pixelRatioCap']);
 const K_PLAIN = new Set(['labels', 'labelMode', 'labelDistance', 'maxLabels', 'labelSize', 'labelColor', 'glow', 'glowSize', 'glowStrength',
-  'depthFade', 'dimOthers', 'linkOpacity', 'linkWidth', 'wireframeFolders', 'wireframeAttachments']);
+  'depthFade', 'dimOthers', 'linkOpacity', 'linkWidth', 'wireframeFolders', 'wireframeAttachments', 'spokeOpacity', 'coreGlow']);
 
 class Engine {
   constructor(app, plugin, host) {
@@ -294,7 +300,7 @@ class Engine {
     this.hover = null; this.hoverSet = null; this.activeId = null; this.focusId = null;
     this.pts = new Map(); this.drag = null; this.tween = null; this.dirty = true;
     this.parts = []; this.stars = []; this.glowCache = new Map(); this.cleanups = [];
-    this.openSecs = { 'Strumenti': true }; this.frame = 0; this.disposed = false; this.lastMoveT = 0;
+    this.openSecs = { 'Nucleo': true }; this.coreNode = null; this.realNodes = null; this.realLinks = null; this.corePool = []; this.frame = 0; this.disposed = false; this.lastMoveT = 0;
     this.mx = -1; this.my = -1; this.pointerDirty = false; this.w = 300; this.h = 300; this.dpr = 1;
     this.targetLeaf = null; this.saveTimer = null; this.structTimer = null;
     this.focal = 300; this.pool = null;
@@ -380,9 +386,12 @@ class Engine {
       } else had++;
     }
     this.hover = null; this.hoverSet = null;
+    const fresh = had < this.nodes.length * 0.5;
+    this.realNodes = this.nodes.length; this.realLinks = this.links.length;
+    this.coreNode = null;
+    if (s.core && this.nodes.length) this.addCore();
     this.styleAll();
     this.rebuildParticles();
-    const fresh = had < this.nodes.length * 0.5;
     this.alpha = fresh ? 1 : 0.45;
     if (fresh) {
       const nn = this.nodes.length;
@@ -395,14 +404,27 @@ class Engine {
     this.dirty = true;
   }
 
+  addCore() {
+    const s = this.s;
+    const c = { id: '__core__', type: 'core', label: 'Nucleo', path: '', ext: '', tags: [], isRoot: false,
+      x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, fx: 0, fy: 0, fz: 0, pinned: true, _deg: 0 };
+    const targets = this.nodes.filter((n) => s.coreAll || n._deg === 0 || (n.type === 'folder' && !n.isRoot && n.path.indexOf('/') < 0));
+    for (const n of targets) this.links.push({ source: c, target: n, type: 'core' });
+    c._deg = targets.length;
+    this.adj.set(c.id, new Set(targets.map((n) => n.id)));
+    this.nodes.push(c);
+    this.coreNode = c;
+  }
+
   styleAll() {
     const s = this.s;
     const T = { note: hex2rgb(s.colorNote), folder: hex2rgb(s.colorFolder), attachment: hex2rgb(s.colorAttachment), tag: hex2rgb(s.colorTag), unresolved: hex2rgb(s.colorUnresolved) };
     const SC = { note: s.scaleNote, folder: s.scaleFolder, attachment: s.scaleAttachment, tag: s.scaleTag, unresolved: s.scaleUnresolved };
-    this.linkRgb = { link: hex2rgb(s.colorLinkLink), embed: hex2rgb(s.colorLinkEmbed), folder: hex2rgb(s.colorLinkFolder), tag: hex2rgb(s.colorLinkTag) };
+    this.linkRgb = { link: hex2rgb(s.colorLinkLink), embed: hex2rgb(s.colorLinkEmbed), folder: hex2rgb(s.colorLinkFolder), tag: hex2rgb(s.colorLinkTag), core: hex2rgb(s.colorLinkCore) };
     this.activeRgb = hex2rgb(s.colorActive);
     const groups = (s.groups || []).map((g) => ({ toks: parseQuery(g.query), c: hex2rgb(g.color) })).filter((g) => g.toks);
     for (const n of this.nodes) {
+      if (n.type === 'core') { n._col = hex2rgb(s.colorCore); n._r = s.coreSize; continue; }
       let c = null;
       for (const g of groups) if (matchQuery(n, g.toks)) { c = g.c; break; }
       if (!c && s.colorMode === 'topFolder' && !n.isRoot && (n.type === 'note' || n.type === 'folder' || n.type === 'attachment')) {
@@ -418,12 +440,18 @@ class Engine {
   rebuildParticles() {
     const s = this.s;
     this.parts = [];
+    this.pool = []; this.corePool = [];
     if (!s.particles || !this.links.length) return;
-    let pool = this.links.filter((l) => s.particlesFolder || l.type !== 'folder');
-    if (!pool.length) pool = this.links;
-    const P = Math.min(s.particleCount, pool.length * 4);
-    for (let i = 0; i < P; i++) this.parts.push({ l: pool[(Math.random() * pool.length) | 0], t: Math.random(), v: 0.5 + Math.random() });
+    const real = this.links.filter((l) => l.type !== 'core');
+    let pool = real.filter((l) => s.particlesFolder || l.type !== 'folder');
+    if (!pool.length) pool = real;
     this.pool = pool;
+    const P = pool.length ? Math.min(s.particleCount, pool.length * 4) : 0;
+    for (let i = 0; i < P; i++) this.parts.push({ l: pool[(Math.random() * pool.length) | 0], t: Math.random(), v: 0.5 + Math.random() });
+    const cp = this.links.filter((l) => l.type === 'core');
+    this.corePool = cp;
+    const C = cp.length ? Math.min(s.coreParticles, cp.length * 3) : 0;
+    for (let i = 0; i < C; i++) this.parts.push({ l: cp[(Math.random() * cp.length) | 0], t: Math.random(), v: 0.6 + Math.random() * 0.8, core: true });
   }
 
   makeStars() {
@@ -458,9 +486,13 @@ class Engine {
       let dx = B.x + B.vx - A.x - A.vx, dy = B.y + B.vy - A.y - A.vy, dz = B.z + B.vz - A.z - A.vz;
       if (dx === 0 && dy === 0 && dz === 0) { dx = (Math.random() - 0.5) * 0.1; dy = (Math.random() - 0.5) * 0.1; dz = (Math.random() - 0.5) * 0.1; }
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
-      const isF = l.type === 'folder';
-      const dist = isF ? s.folderLinkDistance : s.linkDistance;
-      const st = (isF ? s.folderLinkStrength : s.linkStrength) / Math.max(1, Math.min(A._deg, B._deg));
+      let dist, st;
+      if (l.type === 'core') { dist = s.spokeDistance; st = s.spokeStrength; }
+      else {
+        const isF = l.type === 'folder';
+        dist = isF ? s.folderLinkDistance : s.linkDistance;
+        st = (isF ? s.folderLinkStrength : s.linkStrength) / Math.max(1, Math.min(A._deg, B._deg));
+      }
       const kk = ((d - dist) / d) * a * st;
       dx *= kk; dy *= kk; dz *= kk;
       const bias = A._deg / (A._deg + B._deg);
@@ -584,7 +616,7 @@ class Engine {
       this.updateCam();
       for (const n of this.nodes) this.project(n);
       this.pick(x, y);
-      const mode = e.button === 2 || e.button === 1 || e.shiftKey ? 'pan' : this.hover && e.button === 0 ? 'node' : 'orbit';
+      const mode = e.button === 2 || e.button === 1 || e.shiftKey ? 'pan' : this.hover && this.hover.type !== 'core' && e.button === 0 ? 'node' : 'orbit';
       this.drag = { mode, node: this.hover, moved: 0, btn: e.button };
     } else if (this.pts.size === 2) {
       const [a, b] = [...this.pts.values()];
@@ -667,6 +699,7 @@ class Engine {
     else this.flyTo(n);
   }
   nodeMenu(n, e) {
+    if (n.type === 'core') return;
     const menu = new Menu();
     if (n.file instanceof TFile) {
       menu.addItem((i) => i.setTitle('Apri').setIcon('file').onClick(() => this.openNode(n, false)));
@@ -690,12 +723,12 @@ class Engine {
   /* ---------- HUD ---------- */
   updateHud() {
     this.hud.empty();
-    this.hud.createSpan({ text: `${this.nodes.length} nodi · ${this.links.length} collegamenti` });
+    this.hud.createSpan({ text: `${this.realNodes != null ? this.realNodes : this.nodes.length} nodi · ${this.realLinks != null ? this.realLinks : this.links.length} collegamenti` });
     if (this.focusId) {
       const b = this.hud.createEl('button', { text: '✕ esci dal vicinato', cls: 'h3d-hudbtn' });
       b.onclick = () => { this.focusId = null; this.rebuildScene(false); this.fitAll(false); };
     }
-    if (this.hover) this.hud.createDiv({ cls: 'h3d-hudhover', text: this.hover.isRoot ? this.hover.label : this.hover.path });
+    if (this.hover) this.hud.createDiv({ cls: 'h3d-hudhover', text: this.hover.isRoot || !this.hover.path ? this.hover.label : this.hover.path });
   }
 
   /* ---------- ciclo ---------- */
@@ -728,6 +761,7 @@ class Engine {
       animating = true;
     }
     if (s.particles && this.parts.length) animating = true;
+    if (this.coreNode) animating = true;
     if (!animating && !this.dirty && !this.pointerDirty) return;
     this.updateCam();
     for (const n of this.nodes) this.project(n);
@@ -752,7 +786,7 @@ class Engine {
       const A = p.l.source, B = p.l.target;
       const len = Math.max(8, Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z));
       p.t += (dt * sp * p.v * 60) / len;
-      if (p.t > 1) { p.t = 0; if (this.pool && this.pool.length) p.l = this.pool[(Math.random() * this.pool.length) | 0]; }
+      if (p.t > 1) { p.t = 0; const pl = p.core ? this.corePool : this.pool; if (pl && pl.length) p.l = pl[(Math.random() * pl.length) | 0]; }
     }
   }
 
@@ -805,16 +839,17 @@ class Engine {
       const bin = zm < dist - R * 0.35 ? 0 : zm < dist + R * 0.35 ? 1 : 2;
       const hot = hover && (A === hover || B === hover) ? 1 : 0;
       const base = s.linkColorMode === 'node' ? A._col : this.linkRgb[l.type];
-      const key = base[0] + ',' + base[1] + ',' + base[2] + '|' + bin + '|' + hot;
+      const isCore = l.type === 'core' ? 1 : 0;
+      const key = base[0] + ',' + base[1] + ',' + base[2] + '|' + bin + '|' + hot + '|' + isCore;
       let b = buckets.get(key);
-      if (!b) { b = { c: base, bin, hot, list: [] }; buckets.set(key, b); }
+      if (!b) { b = { c: base, bin, hot, core: isCore, list: [] }; buckets.set(key, b); }
       b.list.push(l);
     }
     const ordered = [...buckets.values()].sort((a, b) => a.hot - b.hot);
     ctx.globalCompositeOperation = 'lighter';
     for (const b of ordered) {
       const depthMul = 1 - dfade * [0, 0.35, 0.65][b.bin];
-      let alpha = s.linkOpacity * depthMul, width = s.linkWidth;
+      let alpha = (b.core ? s.spokeOpacity : s.linkOpacity) * depthMul, width = b.core ? Math.max(0.4, s.linkWidth * 0.7) : s.linkWidth;
       if (hi) { if (b.hot) { alpha = Math.min(1, alpha * 2.6 + 0.2); width *= 1.8; } else alpha *= s.dimOthers; }
       ctx.strokeStyle = rgba(b.c, alpha); ctx.lineWidth = Math.max(0.3, width);
       ctx.beginPath();
@@ -846,6 +881,7 @@ class Engine {
     vis.sort((a, b) => b._z - a._z);
     if (s.glow) {
       for (const n of vis) {
+        if (n.type === 'core') continue;
         const rs = Math.max(1.5, n._r * n._k);
         const gs = rs * (1 + s.glowSize * 2.2);
         ctx.globalAlpha = Math.min(1, this.nodeAlpha(n) * s.glowStrength);
@@ -853,8 +889,10 @@ class Engine {
         ctx.drawImage(this.glowSprite(col), n._sx - gs, n._sy - gs, gs * 2, gs * 2);
       }
     }
+    if (s.core && this.coreNode && this.coreNode._vis) this.drawCoreGlow();
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     for (const n of vis) {
+      if (n.type === 'core') { this.drawCoreBody(n); continue; }
       let rs = n._r * n._k;
       const a = this.nodeAlpha(n);
       const isActive = n.id === this.activeId;
@@ -877,6 +915,33 @@ class Engine {
       }
     }
     if (s.labels) this.drawLabels(vis);
+  }
+
+  drawCoreGlow() {
+    const ctx = this.ctx, s = this.s, n = this.coreNode;
+    const rs = Math.max(2, n._r * n._k);
+    const pulse = 1 + 0.07 * Math.sin(performance.now() / 650);
+    const a = this.hoverSet && !this.hoverSet.has(n.id) ? Math.max(0.25, s.dimOthers * 2) : 1;
+    ctx.globalCompositeOperation = 'lighter';
+    const halo = (col, size, alpha) => {
+      const g = size * pulse;
+      ctx.globalAlpha = Math.min(1, alpha * a);
+      ctx.drawImage(this.glowSprite(col), n._sx - g, n._sy - g, g * 2, g * 2);
+    };
+    halo(n._col, rs * 11 * s.coreGlow, 0.55);
+    halo(n._col, rs * 5 * s.coreGlow, 0.85);
+    halo(mixWhite(n._col, 0.6), rs * 2.4, 1);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
+  drawCoreBody(n) {
+    const ctx = this.ctx, rs = Math.max(3, n._r * n._k), c = n._col;
+    ctx.fillStyle = rgba(mixWhite(c, 0.9), 1);
+    ctx.beginPath(); ctx.arc(n._sx, n._sy, rs * 0.6, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = rgba(mixWhite(c, 0.5), 0.9); ctx.lineWidth = Math.max(1, rs * 0.12);
+    ctx.beginPath(); ctx.arc(n._sx, n._sy, rs, 0, 6.2832); ctx.stroke();
+    ctx.strokeStyle = rgba(c, 0.35); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(n._sx, n._sy, rs * 1.7, 0, 6.2832); ctx.stroke();
   }
 
   shapePath(ctx, type, x, y, r) {
@@ -916,6 +981,7 @@ class Engine {
     const cand = [];
     for (const n of vis) {
       if (n._sx < 0 || n._sx > this.w || n._sy < 0 || n._sy > this.h) continue;
+      if (n.type === 'core' && n !== this.hover) continue;
       let pr = 0;
       if (n === this.hover) pr = 4;
       else if (hi && hi.has(n.id)) pr = 3;
@@ -1065,8 +1131,18 @@ class Engine {
     };
     const button = (p, label, fn) => { const b = p.createEl('button', { text: label, cls: 'h3d-btn' }); b.onclick = fn; return b; };
 
+    // Nucleo
+    let p = section('Nucleo');
+    toggle(p, 'Nucleo luminoso al centro', 'core');
+    toggle(p, 'Collega tutti i nodi al nucleo', 'coreAll');
+    p.createDiv({ cls: 'h3d-hint', text: 'Senza la seconda opzione il nucleo si collega solo alle cartelle principali e ai nodi isolati.' });
+    slider(p, 'Dimensione nucleo', 'coreSize', 2, 30, 0.5); slider(p, 'Intensità alone', 'coreGlow', 0.3, 4, 0.1);
+    slider(p, 'Opacità raggi', 'spokeOpacity', 0, 0.8, 0.02); slider(p, 'Distanza raggi', 'spokeDistance', 20, 300, 5);
+    slider(p, 'Forza raggi', 'spokeStrength', 0, 1.5, 0.05); slider(p, 'Particelle dal nucleo', 'coreParticles', 0, 600, 10);
+    color(p, 'Colore nucleo', 'colorCore'); color(p, 'Colore raggi', 'colorLinkCore');
+
     // Filtri
-    let p = section('Filtri e contenuto');
+    p = section('Filtri e contenuto');
     text(p, 'Cerca', 'search', 'path:Uni tag:#esame ext:png');
     p.createDiv({ cls: 'h3d-hint', text: 'Operatori: path: file: tag: ext: type: — "-" davanti per escludere.' });
     toggle(p, 'Note', 'showNotes'); toggle(p, 'Cartelle', 'showFolders'); toggle(p, 'Allegati', 'showAttachments');
@@ -1233,6 +1309,11 @@ class HoloGraph3DPlugin extends Plugin {
     if ((saved.settingsVersion || 0) < 2) {
       // versione 0.1: un solo tema con due colori -> passa allo stile Arancione monocromatico
       Object.assign(this.settings, PRESETS['Arancione'], { style: 'Arancione', settingsVersion: 2 });
+    }
+    if ((saved.settingsVersion || 0) < 3) {
+      // versione 0.3: nucleo luminoso al centro, il nodo radice del vault non serve piu come centro
+      const pr = PRESETS[this.settings.style] || PRESETS['Arancione'];
+      Object.assign(this.settings, { showRoot: false, colorCore: pr.colorCore, colorLinkCore: pr.colorLinkCore, settingsVersion: 3 });
     }
     if (!Array.isArray(this.settings.groups)) this.settings.groups = [];
     const st = document.createElement('style');
