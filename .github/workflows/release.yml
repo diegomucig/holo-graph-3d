@@ -1,0 +1,28 @@
+name: Release
+
+# Crea la release (tag = versione del manifest) con main.js e manifest.json.
+# Parte da sola quando cambia manifest.json su main, oppure a mano da Actions > Release > Run workflow.
+on:
+  push:
+    branches: [main]
+    paths: [manifest.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Crea la release se non esiste
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(jq -r .version manifest.json)
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "La release $VERSION esiste già: niente da fare."
+            exit 0
+          fi
+          gh release create "$VERSION" main.js manifest.json --title "$VERSION" --target "$GITHUB_SHA" --generate-notes
