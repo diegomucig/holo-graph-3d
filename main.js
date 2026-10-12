@@ -14,11 +14,11 @@ const DEFAULTS = {
   showNoteLinks: true, showEmbedLinks: true, showFolderLinks: true, showTagLinks: true,
   localMode: false, localDepth: 2, excludePaths: '',
   // colori
-  colorMode: 'type', groups: [],
-  bgColor: '#02070d',
-  colorNote: '#4cc9ff', colorFolder: '#ffa83a', colorAttachment: '#ff6a3d', colorTag: '#b78cff',
-  colorUnresolved: '#6b7f92', colorActive: '#ffffff',
-  colorLinkLink: '#2f9bff', colorLinkEmbed: '#ff8a3d', colorLinkFolder: '#c77a1e', colorLinkTag: '#8a6bd6',
+  settingsVersion: 2, style: 'Arancione', colorMode: 'type', groups: [],
+  bgColor: '#050302',
+  colorNote: '#ffa726', colorFolder: '#ffd27a', colorAttachment: '#e8660c', colorTag: '#ffc04d',
+  colorUnresolved: '#7a4a22', colorActive: '#fff1d6',
+  colorLinkLink: '#d9801a', colorLinkEmbed: '#ff8c1a', colorLinkFolder: '#9c5a14', colorLinkTag: '#b8761c',
   linkColorMode: 'type',
   // nodi
   nodeSize: 3.2, sizeByDegree: 1, scaleNote: 1, scaleFolder: 1.7, scaleAttachment: 1.1, scaleTag: 1.2, scaleUnresolved: 0.7,
@@ -27,10 +27,10 @@ const DEFAULTS = {
   linkOpacity: 0.5, linkWidth: 1,
   particles: true, particleCount: 300, particleSpeed: 0.5, particleSize: 1.6, particlesFolder: false,
   // etichette
-  labels: true, labelMode: 'near', labelDistance: 220, maxLabels: 50, labelSize: 12, labelColor: '#d6efff',
+  labels: true, labelMode: 'near', labelDistance: 220, maxLabels: 50, labelSize: 12, labelColor: '#ffe3bf',
   // effetti
-  glow: true, glowSize: 1.6, glowStrength: 0.8, depthFade: 0.6, dimOthers: 0.12,
-  stars: true, starCount: 1200, starColor: '#7fb8ff',
+  glow: true, glowSize: 1.5, glowStrength: 0.55, depthFade: 0.6, dimOthers: 0.12,
+  stars: true, starCount: 1200, starColor: '#ffb066',
   autoRotate: false, autoRotateSpeed: 0.12, pixelRatioCap: 2,
   // forze
   repulsion: 45, linkDistance: 32, linkStrength: 0.8, folderLinkDistance: 20, folderLinkStrength: 0.9,
@@ -39,23 +39,16 @@ const DEFAULTS = {
 };
 
 const PRESETS = {
-  'Olografico (arancio + azzurro)': {},
-  'Neon verde/magenta': {
-    bgColor: '#030a06', colorNote: '#39ff88', colorFolder: '#ff3df0', colorAttachment: '#ffee3a', colorTag: '#3adfff',
-    colorUnresolved: '#587a66', colorLinkLink: '#1fbf6a', colorLinkEmbed: '#ffd23a', colorLinkFolder: '#b0289f',
-    colorLinkTag: '#2aa8c0', starColor: '#66ffb0', labelColor: '#d8ffe8' },
-  'Ghiaccio (blu monocromo)': {
-    bgColor: '#030812', colorNote: '#8fd3ff', colorFolder: '#d8f1ff', colorAttachment: '#5aa7ff', colorTag: '#a7b8ff',
-    colorUnresolved: '#4c6280', colorLinkLink: '#3b86d6', colorLinkEmbed: '#6fb2ff', colorLinkFolder: '#5d7fa8',
-    colorLinkTag: '#7a8fe0', starColor: '#a6d2ff', labelColor: '#e4f3ff' },
-  'Classico Obsidian (viola/grigio)': {
-    bgColor: '#161616', colorNote: '#a88bfa', colorFolder: '#c9c9c9', colorAttachment: '#7fb3d5', colorTag: '#8bc34a',
-    colorUnresolved: '#666666', colorLinkLink: '#8a8a8a', colorLinkEmbed: '#7fb3d5', colorLinkFolder: '#666666',
-    colorLinkTag: '#6f9a3a', starColor: '#888888', labelColor: '#dddddd', glow: false, linkOpacity: 0.6 },
-  'Caldo (rosso/oro)': {
-    bgColor: '#0c0503', colorNote: '#ffcf5a', colorFolder: '#ff5a3a', colorAttachment: '#ff9a3a', colorTag: '#ffe9a8',
-    colorUnresolved: '#7a5a4a', colorLinkLink: '#d98a2a', colorLinkEmbed: '#ff7a3a', colorLinkFolder: '#a63a22',
-    colorLinkTag: '#c9a84a', starColor: '#ffb98a', labelColor: '#fff0d6' },
+  'Arancione': {
+    bgColor: '#050302', colorNote: '#ffa726', colorFolder: '#ffd27a', colorAttachment: '#e8660c', colorTag: '#ffc04d',
+    colorUnresolved: '#7a4a22', colorActive: '#fff1d6',
+    colorLinkLink: '#d9801a', colorLinkEmbed: '#ff8c1a', colorLinkFolder: '#9c5a14', colorLinkTag: '#b8761c',
+    starColor: '#ffb066', labelColor: '#ffe3bf' },
+  'Azzurro': {
+    bgColor: '#020812', colorNote: '#3ec6ff', colorFolder: '#b5ecff', colorAttachment: '#1f8fff', colorTag: '#7fd8ff',
+    colorUnresolved: '#3b5873', colorActive: '#e8f9ff',
+    colorLinkLink: '#2a9be0', colorLinkEmbed: '#1f7fe0', colorLinkFolder: '#2b6ea0', colorLinkTag: '#3aa6c9',
+    starColor: '#8fd0ff', labelColor: '#d6f2ff' },
 };
 
 function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULTS)); }
@@ -318,6 +311,7 @@ class Engine {
     const af = this.app.workspace.getActiveFile();
     this.activeId = af ? af.path : null;
     this.bindEvents();
+    this.applyTheme();
     this.buildPanel();
     this.resize();
     this.makeStars();
@@ -949,6 +943,7 @@ class Engine {
 
   /* ---------- modifica impostazioni ---------- */
   changed(key) {
+    if (key === 'bgColor' || key === 'colorNote' || key === 'labelColor') this.applyTheme();
     if (K_STRUCT.has(key)) {
       clearTimeout(this.structTimer);
       this.structTimer = setTimeout(() => { if (!this.disposed) this.rebuildScene(false); }, key === 'search' || key === 'excludePaths' ? 250 : 0);
@@ -968,17 +963,19 @@ class Engine {
   applyPreset(name) {
     const p = PRESETS[name];
     if (!p) return;
-    const keep = { search: this.s.search, groups: this.s.groups, panelVisible: this.s.panelVisible };
-    Object.assign(this.s, cloneDefaults(), keep, JSON.parse(JSON.stringify(p)));
+    Object.assign(this.s, JSON.parse(JSON.stringify(p)));
+    this.s.style = name;
     this.afterBulkChange();
   }
   resetAll() {
+    const st = PRESETS[this.s.style] ? this.s.style : 'Arancione';
     Object.keys(this.s).forEach((k) => delete this.s[k]);
-    Object.assign(this.s, cloneDefaults());
+    Object.assign(this.s, cloneDefaults(), JSON.parse(JSON.stringify(PRESETS[st])));
+    this.s.style = st;
     this.afterBulkChange();
   }
   afterBulkChange() {
-    this.makeStars(); this.resize(); this.rebuildScene(false);
+    this.makeStars(); this.resize(); this.applyTheme(); this.rebuildScene(false);
     this.buildPanel(); this.scheduleSave(); this.dirty = true;
   }
 
@@ -995,6 +992,18 @@ class Engine {
     new Notice('Screenshot salvato: ' + path);
   }
 
+  applyTheme() {
+    const s = this.s, st = this.host.style;
+    const acc = hex2rgb(s.colorNote), lt = mixWhite(acc, 0.35), bg = hex2rgb(s.bgColor), tx = hex2rgb(s.labelColor);
+    st.setProperty('--h3d-bg', s.bgColor);
+    st.setProperty('--h3d-bg-rgb', bg.join(','));
+    st.setProperty('--h3d-acc-rgb', acc.join(','));
+    st.setProperty('--h3d-acc', 'rgb(' + acc.join(',') + ')');
+    st.setProperty('--h3d-lt', 'rgb(' + lt.join(',') + ')');
+    st.setProperty('--h3d-tx', 'rgb(' + tx.join(',') + ')');
+    st.setProperty('--h3d-dim', 'rgba(' + tx.join(',') + ',0.62)');
+  }
+
   /* ---------- pannello ---------- */
   buildPanel() {
     const s = this.s, wrap = this.panelWrap;
@@ -1006,6 +1015,12 @@ class Engine {
     this.panelBody = body;
     body.toggleClass('is-hidden', !s.panelVisible);
     gear.onclick = () => { s.panelVisible = !s.panelVisible; body.toggleClass('is-hidden', !s.panelVisible); this.scheduleSave(); };
+    const sw = body.createDiv({ cls: 'h3d-styles' });
+    for (const name of Object.keys(PRESETS)) {
+      const b = sw.createEl('button', { text: name, cls: 'h3d-style' + (s.style === name ? ' is-on' : '') });
+      b.style.setProperty('--sw', PRESETS[name].colorNote);
+      b.onclick = () => this.applyPreset(name);
+    }
 
     const section = (title) => {
       const d = body.createEl('details', { cls: 'h3d-sec' });
@@ -1130,10 +1145,6 @@ class Engine {
 
     // Strumenti
     p = section('Strumenti');
-    const pc = row(p, 'Stile');
-    const presetSel = pc.createEl('select');
-    for (const k of Object.keys(PRESETS)) presetSel.createEl('option', { text: k, value: k });
-    button(p, 'Applica stile', () => this.applyPreset(presetSel.value));
     button(p, 'Ricentra vista', () => this.fitAll(false));
     button(p, 'Ricalcola layout', () => {
       for (const n of this.nodes) { n.x = (Math.random() - 0.5) * 80; n.y = (Math.random() - 0.5) * 80; n.z = (Math.random() - 0.5) * 80; n.vx = n.vy = n.vz = 0; }
@@ -1167,30 +1178,35 @@ class HoloGraphView extends ItemView {
 /* ================================== PLUGIN ================================ */
 const CSS = `
 .h3d-host{padding:0 !important;overflow:hidden !important}
-.h3d-root{position:relative;width:100%;height:100%;overflow:hidden;background:#02070d;user-select:none}
+.h3d-root{position:relative;width:100%;height:100%;overflow:hidden;background:var(--h3d-bg,#050302);user-select:none;--h3d-bg-rgb:5,3,2;--h3d-acc-rgb:255,167,38;--h3d-acc:rgb(255,167,38);--h3d-lt:rgb(255,210,122);--h3d-tx:rgb(255,227,191);--h3d-dim:rgba(255,227,191,.62)}
 .h3d-canvas{position:absolute;left:0;top:0;display:block;touch-action:none;outline:none;cursor:grab}
-.h3d-hud{position:absolute;left:12px;top:10px;max-width:55%;color:#9fd6ff;font-size:12px;pointer-events:none;text-shadow:0 0 6px #000,0 0 3px #000}
-.h3d-hudhover{margin-top:4px;color:#fff;word-break:break-all}
+.h3d-hud{position:absolute;left:12px;top:10px;max-width:55%;color:var(--h3d-lt);font-size:12px;pointer-events:none;text-shadow:0 0 6px #000,0 0 3px #000}
+.h3d-hudhover{margin-top:4px;color:var(--h3d-tx);word-break:break-all}
 .h3d-hudbtn{pointer-events:auto;margin-left:8px;font-size:11px;padding:1px 8px;border-radius:10px}
 .h3d-panelwrap{position:absolute;right:10px;top:10px;bottom:10px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none}
-.h3d-gear{pointer-events:auto;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(4,12,20,.8);border:1px solid rgba(80,170,255,.45);color:#9fd6ff;flex:0 0 auto}
-.h3d-panel{pointer-events:auto;width:290px;max-width:calc(100vw - 30px);flex:0 1 auto;min-height:0;overflow-y:auto;background:rgba(4,12,20,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(80,170,255,.35);border-radius:10px;padding:4px 8px;color:#cfe8ff;font-size:12px;user-select:none}
+.h3d-gear{pointer-events:auto;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(var(--h3d-bg-rgb),.8);border:1px solid rgba(var(--h3d-acc-rgb),.5);color:var(--h3d-lt);flex:0 0 auto}
+.h3d-panel{pointer-events:auto;width:290px;max-width:calc(100vw - 30px);flex:0 1 auto;min-height:0;overflow-y:auto;background:rgba(var(--h3d-bg-rgb),.84);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(var(--h3d-acc-rgb),.38);border-radius:10px;padding:4px 8px;color:var(--h3d-tx);font-size:12px;user-select:none}
 .h3d-panel.is-hidden{display:none}
-.h3d-sec{border-bottom:1px solid rgba(80,170,255,.18)}
-.h3d-sec>summary{cursor:pointer;padding:7px 2px;font-weight:600;color:#8fd3ff;list-style:none}
+.h3d-styles{display:flex;gap:6px;padding:6px 0 8px;border-bottom:1px solid rgba(var(--h3d-acc-rgb),.2)}
+.h3d-style{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;padding:5px 8px;border-radius:7px;background:transparent;border:1px solid rgba(var(--h3d-acc-rgb),.3);color:var(--h3d-tx);box-shadow:none}
+.h3d-style::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--sw);box-shadow:0 0 6px var(--sw)}
+.h3d-style.is-on{border-color:var(--h3d-acc);background:rgba(var(--h3d-acc-rgb),.16)}
+.h3d-sec{border-bottom:1px solid rgba(var(--h3d-acc-rgb),.2)}
+.h3d-sec>summary{cursor:pointer;padding:7px 2px;font-weight:600;color:var(--h3d-lt);list-style:none}
 .h3d-sec>summary::-webkit-details-marker{display:none}
-.h3d-sec>summary::before{content:'▸ ';color:#4cc9ff}
+.h3d-sec>summary::before{content:'▸ ';color:var(--h3d-acc)}
 .h3d-sec[open]>summary::before{content:'▾ '}
 .h3d-secbody{padding:2px 0 8px}
 .h3d-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 0}
 .h3d-lbl{flex:1 1 45%;min-width:0}
 .h3d-ctl{flex:1 1 55%;display:flex;align-items:center;gap:6px;justify-content:flex-end}
-.h3d-ctl input[type=range]{flex:1;min-width:0;height:18px}
+.h3d-ctl input[type=range]{flex:1;min-width:0;height:18px;accent-color:var(--h3d-acc)}
+.h3d-ctl input[type=checkbox]{accent-color:var(--h3d-acc)}
 .h3d-ctl input[type=text],.h3d-ctl select{width:100%;font-size:12px;height:24px;padding:0 6px}
 .h3d-ctl input[type=color]{width:42px;height:22px;padding:0;border:none;background:none;cursor:pointer}
-.h3d-val{width:34px;text-align:right;color:#8fd3ff;font-variant-numeric:tabular-nums}
-.h3d-sub{margin:8px 0 2px;color:#8fd3ff;font-weight:600}
-.h3d-hint{color:#7da3c0;font-size:11px;margin:3px 0 6px;line-height:1.35}
+.h3d-val{width:34px;text-align:right;color:var(--h3d-lt);font-variant-numeric:tabular-nums}
+.h3d-sub{margin:8px 0 2px;color:var(--h3d-lt);font-weight:600}
+.h3d-hint{color:var(--h3d-dim);font-size:11px;margin:3px 0 6px;line-height:1.35}
 .h3d-grow{display:flex;gap:6px;align-items:center;margin:3px 0}
 .h3d-grow input[type=text]{flex:1;min-width:0;height:24px;font-size:12px}
 .h3d-grow input[type=color]{width:38px;height:22px;padding:0;border:none;background:none}
@@ -1212,7 +1228,12 @@ class HoloSettingTab extends PluginSettingTab {
 
 class HoloGraph3DPlugin extends Plugin {
   async onload() {
-    this.settings = Object.assign(cloneDefaults(), (await this.loadData()) || {});
+    const saved = (await this.loadData()) || {};
+    this.settings = Object.assign(cloneDefaults(), saved);
+    if ((saved.settingsVersion || 0) < 2) {
+      // versione 0.1: un solo tema con due colori -> passa allo stile Arancione monocromatico
+      Object.assign(this.settings, PRESETS['Arancione'], { style: 'Arancione', settingsVersion: 2 });
+    }
     if (!Array.isArray(this.settings.groups)) this.settings.groups = [];
     const st = document.createElement('style');
     st.id = 'holo-graph-3d-css'; st.textContent = CSS;
